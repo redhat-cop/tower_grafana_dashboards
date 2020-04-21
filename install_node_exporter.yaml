@@ -1,0 +1,61 @@
+---
+- hosts: localhost
+  name: Install node_exporter on RHEL8
+  become: true
+  tasks:
+
+    - name: Add user node_exporter
+      user:
+        name: node_exporter
+        shell: /bin/false
+        system: true
+        create_home: no
+
+    - name: Download and extract 
+      unarchive:
+        src: https://github.com/prometheus/node_exporter/releases/download/v0.18.1/node_exporter-0.18.1.linux-amd64.tar.gz
+        dest: /tmp
+        remote_src: yes
+
+    - name: Copy bin node_exporter to /usr/local/bin
+      copy:
+        src: /tmp/node_exporter-0.18.1.linux-amd64/node_exporter
+        dest: /usr/local/bin/
+        owner: node_exporter
+        group: node_exporter
+        mode: u+x,g+x,o+x    
+
+    - name: Create service node_exporter.service
+      blockinfile:
+        path: /etc/systemd/system/node_exporter.service
+        block: |
+          [Unit]
+          Description=Prometheus Node Exporter
+          Wants=network-online.target
+          After=network-online.target
+
+          [Service]
+          User=node_exporter
+          Group=node_exporter
+          Type=simple
+          ExecStart=/usr/local/bin/node_exporter
+
+          [Install]
+          WantedBy=multi-user.target
+        create: true
+
+    - name: systemctl daemon_reload
+      systemd:
+        daemon_reload: yes
+
+    - name: Start and Enable node_exporter
+      service:
+        name: node_exporter
+        state: started
+        enabled: yes
+
+    - name: Check whether port 9100 is available
+      wait_for:
+        port: 9100
+        state: started
+        timeout: 5
